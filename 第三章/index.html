@@ -1,0 +1,559 @@
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>武汉市红色旅游主题线路</title>
+    <link rel="stylesheet" href="CSS/leaflet.css" />
+    <script src="JS/leaflet.js"></script>
+    <script src="JS/leaflet.ChineseTmsProviders.js"></script>
+    <script src="JS/jquery-3.5.1.js"></script>
+    <script src="JS/L.Polyline.SnakeAnim.js"></script>
+    <script src="JS/leaflet.mask.js"></script>
+  </head>
+  <body>
+    <div class="title">武汉市红色旅游主题线路</div>
+    <!-- 导航栏，按钮由代码动态创建 -->
+    <div class="nav"></div>
+    <div>
+      <div class="container" style="display: flex">
+        <!-- 侧边栏，按钮由代码动态创建 -->
+        <div class="sidebar" style="width: 20%"></div>
+        <!-- leaflet地图显示区域 -->
+        <div id="mapid" style="width: 60%; height: 80vh"></div>
+        <!-- 详情说明区域 -->
+        <div class="content" style="width: 20%">
+          <p>线路描述：</p>
+          <p><br /></p>
+          <p>景点描述：</p>
+          <p></p>
+        </div>
+      </div>
+      <!-- 底部 -->
+      <div class="footer">
+        中国地质大学（武汉）数字制图学课程设计 <br />2024年1月
+      </div>
+    </div>
+  </body>
+  <script>
+    // 定义地图
+    let my_map = L.map("mapid", {
+      center: [30.55, 114.3],
+      zoom: 10,
+    });
+    // 定义卫星地图图层
+    L.tileLayer
+      .chinaProvider("GaoDe.Satellite.Map", {
+        //高德地图常规地图图层
+        maxZoom: 20, //最大缩放等级
+        minZoom: 5, //最小缩放等级
+      })
+      .addTo(my_map);
+    // 定义卫星地图注记图层
+    L.tileLayer
+      .chinaProvider("GaoDe.Satellite.Annotion", {
+        //高德地图常规地图图层
+        maxZoom: 20, //最大缩放等级
+        minZoom: 5, //最小缩放等级
+      })
+      .addTo(my_map);
+    // 设置掩膜
+    L.mask("data/wuhan.geojson", {
+      fillOpacity: 0.5,
+    }).addTo(my_map);
+  </script>
+
+  <script>
+    // 存储所有路线
+    let routes = {};
+    // 存储所有场所
+    let places = {};
+    // 存储所有覆盖物
+    let markers = [];
+    // 存储当前轨迹
+    let path = null;
+    // 当前选中的路线的 id
+    let selected_route_id = null;
+
+    // 定义函数，用来加载本地的 csv 文件
+    function loadCSV(file, callback) {
+      // 创建一个 XMLHttpRequest 对象
+      let xhr = new XMLHttpRequest();
+      // 设置请求的方法和地址
+      xhr.open("GET", file, true);
+      // 设置请求的响应类型为文本
+      xhr.responseType = "text";
+      // 设置请求的状态变化的监听函数
+      xhr.onreadystatechange = function () {
+        // 如果请求已完成并成功
+        if (xhr.readyState === 4 && xhr.status === 200) {
+          // 调用回调函数，传入响应的文本
+          callback(xhr.responseText);
+        }
+      };
+      // 发送请求
+      xhr.send(null);
+    }
+
+    // 定义函数，用来解析 csv 文件的内容
+    function parseCSV(text) {
+      // 定义一个变量，存储解析后的数据
+      let data = [];
+      // 按换行符分割文本，得到每一行的数组
+      let lines = text.split("\n");
+      // 遍历每一行
+      for (let line of lines) {
+        // 如果行不为空
+        if (line) {
+          // 按逗号分割行，得到每一列的数组
+          let columns = line.split(",");
+          // 将列的数组添加到数据中
+          data.push(columns);
+        }
+      }
+      // 返回数据
+      return data;
+    }
+
+    // 定义函数，用来处理路线的数据
+    function handleRoutes(data) {
+      // 遍历每一行数据，从第二行开始，跳过表头
+      for (let i = 1; i < data.length; i++) {
+        // 获取当前行的数据
+        let row = data[i];
+        // 获取路线的 id
+        let route_id = row[0];
+        // 获取路线的名称
+        let route_name = row[1];
+        // 获取路线的详情
+        let route_detail = row[2];
+        // 获取路线的描述
+        let route_desc = row[3];
+        // 将路线的数据存储到 routes 对象中，以 id 为键，其他信息为值
+        routes[route_id] = {
+          name: route_name,
+          detail: route_detail,
+          desc: route_desc,
+        };
+      }
+    }
+
+    // 定义函数，用来处理场所的数据
+    function handlePlaces(data) {
+      // 遍历每一行数据，从第二行开始，跳过表头
+      for (let i = 1; i < data.length; i++) {
+        // 获取当前行的数据
+        let row = data[i];
+        // 获取场所的 id
+        let place_id = row[0];
+        // 获取场所的名称
+        let place_name = row[1];
+
+        let place_lng = row[2];
+        let place_lat = row[3];
+        // 获取场所的描述
+        let place_desc = row[4];
+        // 将场所的数据存储到 places 对象中，以 name 为键，其他信息为值
+        places[place_name] = {
+          id: place_id,
+          lng: place_lng,
+          lat: place_lat,
+          desc: place_desc,
+        };
+      }
+    }
+
+    // 定义函数，用来创建导航栏按钮
+    function createNavButtons() {
+      // 获取导航栏的元素
+      let nav = document.querySelector(".nav");
+      // 遍历 routes 对象的键，即路线的 id
+      for (let route_id in routes) {
+        // 获取路线的名称
+        let route_name = routes[route_id].name;
+        // 创建一个按钮元素
+        let button = document.createElement("button");
+        // 设置按钮的文本为路线的名称
+        button.textContent = route_name;
+        // 为按钮添加点击事件，传入路线的 id
+        button.onclick = function () {
+          handleNavClick(route_id);
+        };
+        // 将按钮添加到导航栏中
+        nav.appendChild(button);
+      }
+    }
+
+    // 定义函数，用来创建侧边栏按钮
+    function createSideButtons(route_id) {
+      // 获取侧边栏的元素
+      let sidebar = document.querySelector(".sidebar");
+      // 清空侧边栏的内容
+      sidebar.innerHTML = "";
+      // 获取路线的详情
+      let route_detail = routes[route_id].detail;
+      // 按破折号分割路线的详情，得到每个场所的 name 的数组
+      let place_names = route_detail.split("—");
+      // 遍历每个场所的 id
+      for (let place_name of place_names) {
+        // 创建一个按钮元素
+        let button = document.createElement("button");
+        // 设置按钮的文本为场所的名称
+        button.textContent = place_name;
+        // 为按钮添加点击事件，传入场所名称
+        button.onclick = function () {
+          handleSideClick(place_name);
+        };
+        // 将按钮添加到侧边栏中
+        sidebar.appendChild(button);
+      }
+      // 创建绘制轨迹线按钮
+      let draw_path = document.createElement("button");
+      draw_path.textContent = "绘制轨迹线";
+      draw_path.onclick = function () {
+        handleDrawPathClick(route_id);
+      };
+      // 将按钮添加到侧边栏中
+      sidebar.appendChild(draw_path);
+    }
+
+    // 定义函数，用来处理绘制轨迹线的点击事件
+    function handleDrawPathClick(route_id) {
+      //   console.log(selected_route_id);
+      // 去掉已有轨迹线
+      if (path) {
+        my_map.removeLayer(path);
+      }
+
+      // 获取路线的详情
+      let route_detail = routes[selected_route_id].detail;
+      // 按破折号分割路线的详情，得到每个场所的 id 的数组
+      let place_names = route_detail.split("—");
+      // 定义一个变量，存储所有的轨迹线的节点坐标
+      let all_lat_lngs = [];
+      // 定义一个变量，存储当前的场所的索引
+      let current_index = 0;
+
+      // 定义一个函数，用来递归地获取两个场所之间的步行轨迹线
+      function getPath() {
+        // 判断是否已经遍历完所有的场所
+        if (current_index < place_names.length - 1) {
+          // 获取当前场所的名称
+          let place_name = place_names[current_index];
+          // 获取当前场所的 id
+          let place_id = places[place_name].id;
+          // 获取当前场所的经度
+          let place_lng = places[place_name].lng;
+          // 获取当前场所的纬度
+          let place_lat = places[place_name].lat;
+          // 获取下一个场所的 name
+          let next_place_name = place_names[current_index + 1];
+          // 获取下一个场所的经度
+          let next_place_lng = places[next_place_name].lng;
+          // 获取下一个场所的纬度
+          let next_place_lat = places[next_place_name].lat;
+          // 构建高德地图步行路径规划服务的参数，传入当前场所和下一个场所的坐标
+          let para =
+            "destination=" +
+            next_place_lng +
+            "," +
+            next_place_lat +
+            "&" +
+            "origin=" +
+            place_lng +
+            "," +
+            place_lat +
+            "&output=JSON";
+          // 构建高德地图步行路径规划服务的 URL
+          let url = "https://restapi.amap.com/v3/direction/walking?";
+          key = "65e453b2952957e068ba517a7cf0f6ce";
+          url = url + para + "&key=" + key;
+          // 访问高德地图步行路径规划服务
+          $.get(url, function (data) {
+            // 获取步行路径的结果
+            let paths = data.route.paths;
+            // 遍历每一段步行路径
+            for (let i = 0; i < paths.length; i++) {
+              // 获取每一段步行路径的节点坐标
+              let steps = paths[i].steps;
+              // 遍历每一段步行路径的节点坐标
+              for (let j = 0; j < steps.length; j++) {
+                // 将节点坐标分割为数组
+                let node_arr = steps[j].polyline.split(";");
+                // 遍历每个节点坐标
+                for (let k = 0; k < node_arr.length; k++) {
+                  // 将节点坐标转换为数值数组，并反转顺序
+                  let ele = node_arr[k].split(",").map(Number).reverse();
+                  // 将节点坐标添加到所有的轨迹线的节点坐标中
+                  all_lat_lngs.push(ele);
+                }
+              }
+            }
+            // 将当前的场所的索引加一
+            current_index++;
+            // 递归地调用自身，获取下一段步行轨迹线
+            getPath();
+          });
+        } else {
+          // 如果已经遍历完所有的场所，说明已经获取了所有的轨迹线的节点坐标
+          // 获取最后一个场所的名称
+          let place_name = place_names[current_index];
+          // 获取最后一个场所的 id
+          let place_id = places[place_name].id;
+          // 获取最后一个场所的经度
+          let place_lng = places[place_name].lng;
+          // 获取最后一个场所的纬度
+          let place_lat = places[place_name].lat;
+          // 在地图上绘制整个路线的步行轨迹线，传入所有的轨迹线的节点坐标
+          //   console.log(allLatlngs);
+          //   用于改变地图的视野
+          full_path = L.polyline(all_lat_lngs, {});
+
+          //  用于绘制蛇形线
+          (path = L.polyline(all_lat_lngs, {
+            color: "red",
+            weight: 8,
+            snakingSpeed: 200, //蛇行速度，像素/秒
+          }).addTo(my_map)).snakeIn();
+
+          // 调整地图的视野，使得所有的覆盖物和轨迹线都可见
+          my_map.fitBounds(full_path.getBounds());
+        }
+      }
+      // 调用函数，开始获取第一段步行轨迹线
+      getPath();
+    }
+
+    // 函数，用来处理导航栏的点击事件
+    function handleNavClick(route_id) {
+      // 去掉已有轨迹线
+      if (path) {
+        my_map.removeLayer(path);
+      }
+
+      // 获取所有的导航栏的按钮元素
+      let nav_buttons = document.querySelectorAll(".nav button");
+      // 遍历每个按钮元素
+      for (let button of nav_buttons) {
+        // 如果当前元素的文本和路线的名称相同
+        if (button.textContent === routes[route_id].name) {
+          // 添加 active 类名，改变颜色
+          button.classList.add("active");
+        } else {
+          // 移除 active 类名，恢复颜色
+          button.classList.remove("active");
+        }
+      }
+
+      // 创建侧边栏的按钮，传入路线的 id
+      createSideButtons(route_id);
+      // 获取内容区域的元素，匹配第二个 p 元素
+      let content = document.querySelector(".content p:nth-of-type(2)");
+      // 设置内容区域的文本为路线的描述
+      content.textContent = routes[route_id].desc;
+      // 清空覆盖物的数组
+      markers = [];
+      // 清空地图上的覆盖物
+      my_map.eachLayer(function (layer) {
+        if (layer instanceof L.Marker) {
+          my_map.removeLayer(layer);
+        }
+      });
+      // 在地图上添加覆盖物，标注出线路包含的场所地点
+      addMarkers(route_id);
+      // 调整地图的视野，使得所有的覆盖物都可见
+      my_map.fitBounds(L.featureGroup(markers).getBounds());
+      // 保存当前选中的路线的 id
+      selected_route_id = route_id;
+    }
+
+    // 定义函数，用来处理侧边栏的点击事件
+    function handleSideClick(place_name) {
+      if (path) {
+        my_map.removeLayer(path); //去掉已有轨迹线
+      }
+
+      // 获取所有的侧边栏的按钮元素
+      let side_buttons = document.querySelectorAll(".sidebar button");
+      // 遍历每个按钮元素
+      for (let button of side_buttons) {
+        // 如果当前元素的文本和场所的名称相同
+        if (button.textContent === place_name) {
+          // 添加 active 类名，变成粉色
+          button.classList.add("active");
+        } else {
+          // 移除 active 类名，恢复白色
+          button.classList.remove("active");
+        }
+      }
+      // 获取内容区域的元素
+      let content = document.querySelector(".content p:nth-of-type(4)");
+      // 设置内容区域的文本为场所的描述
+      content.textContent = places[place_name].desc;
+      // 在地图上缩放至该场所的地点
+      zoomToPlace(place_name);
+    }
+
+    // 定义函数，用来在地图上添加覆盖物，标注出线路包含的场所地点
+    function addMarkers(route_id) {
+      // 获取路线的详情
+      let route_detail = routes[route_id].detail;
+      // 按破折号分割路线的详情，得到每个场所的 id 的数组
+      let place_names = route_detail.split("—");
+      // 遍历每个场所的 id
+      for (let place_name of place_names) {
+        // 获取场所的经度
+        let place_lng = places[place_name].lng;
+        // 获取场所的纬度
+        let place_lat = places[place_name].lat;
+
+        // 创建一个坐标对象，传入场所的坐标
+        let latlng = L.latLng(place_lat, place_lng);
+
+        // 添加覆盖物
+        let marker = L.marker(latlng, {}).addTo(my_map);
+
+        // 创建文字标注
+        let markerIcon = L.divIcon({
+          html: place_name,
+          className: "my-div-icon",
+          iconSize: [250, 70], //marker宽高
+          iconAnchor: [-20, 40], //文字标注相对位置
+        });
+        // 将文字标注添加到地图上
+        L.marker(latlng, { icon: markerIcon }).addTo(my_map);
+        // 将覆盖物添加到数组中
+        markers.push(marker);
+      }
+    }
+    // 定义函数，用来在地图上缩放至该场所的地点
+    function zoomToPlace(place_name) {
+      // 获取场所的经度
+      let place_lng = places[place_name].lng;
+      // 获取场所的纬度
+      let place_lat = places[place_name].lat;
+      // 设置地图的中心和缩放等级
+      my_map.setView([place_lat, place_lng], 18);
+    }
+
+    // 定义函数，用来初始化页面
+    function init() {
+      // 加载本地的 route.csv 文件，传入处理路线的函数
+      loadCSV("route.csv", function (text) {
+        // 解析 csv 文件的内容，得到数据
+        let data = parseCSV(text);
+        // 处理路线的数据，存储到 routes 对象中
+        handleRoutes(data);
+        // 创建导航栏的按钮
+        createNavButtons();
+        // console.log(routes);
+      });
+      // 加载本地的 place.csv 文件，传入处理场所的函数
+      loadCSV("place.csv", function (text) {
+        // 解析 csv 文件的内容，得到数据
+        let data = parseCSV(text);
+        // 处理场所的数据，存储到 places 对象中
+        handlePlaces(data);
+        // console.log(places);
+      });
+    }
+    // 当页面加载完成时，调用初始化函数
+    window.onload = init;
+  </script>
+  <style>
+    /* 设置页面样式 */
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+    }
+
+    .title {
+      text-align: center;
+      font-size: 36px;
+      padding: 15px;
+      color: #f0e0b0;
+      background-color: #ae3a1f;
+    }
+
+    .nav {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      background-color: #cf4f3c;
+      height: 50px;
+    }
+
+    .nav button {
+      width: 100px;
+      height: 30px;
+      border: none;
+      background-color: #f9f1e6;
+      cursor: pointer;
+
+      color: #ce6f57;
+
+      border-radius: 10px;
+    }
+
+    /* 添加光标悬浮效果 */
+    .nav button:hover {
+      background-color: #fae3df;
+    }
+
+    /* 添加选中颜色 */
+    .nav button.active {
+      background-color: #f6c8c0;
+    }
+
+    .sidebar {
+      width: 20%;
+      height: 80vh;
+      background-color: #d97857;
+      overflow-y: auto;
+    }
+
+    .sidebar button {
+      display: block;
+      width: 100%;
+      height: 50px;
+      border: none;
+      background-color: #e8ab98;
+      cursor: pointer;
+    }
+
+    /* 添加光标悬浮效果 */
+    .sidebar button:hover {
+      background-color: #de9e8b;
+    }
+
+    /* 添加选中颜色 */
+    .sidebar button.active {
+      background-color: #cc715d;
+    }
+
+    .content {
+      width: 20%;
+      height: 80vh;
+      background-color: #d97857;
+      overflow-y: auto;
+    }
+
+    .content p {
+      margin: 20px;
+      font-size: 18px;
+      color: #fcf5ee;
+    }
+
+    .footer {
+      text-align: center;
+      font-size: 12px;
+      color: #f0e0b0;
+      background-color: #c05744;
+      padding: 7px;
+    }
+
+    .my-div-icon {
+      font-size: 15px;
+      font-weight: bold;
+      color: #d83615;
+    }
+  </style>
+</html>
