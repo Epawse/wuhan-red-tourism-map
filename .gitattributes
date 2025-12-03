@@ -1,1 +1,10 @@
-* linguist-vendored
+# Ignore data files from language statistics
+public/data/*.geojson linguist-vendored
+public/data/*.csv linguist-vendored
+public/images/* linguist-vendored
+
+# Ensure source code is detected correctly (optional, usually automatic)
+*.vue linguist-detectable
+*.ts linguist-detectable
+*.js linguist-detectable
+*.css linguist-detectable
