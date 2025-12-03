@@ -285,147 +285,90 @@ function handleDrawPathClick() {
 
 <template>
   <div class="red-tourism-layout">
-    <div class="title">武汉市红色旅游主题线路</div>
-    
-    <div class="nav">
-      <button 
-        v-for="(route, id) in routes" 
-        :key="id"
-        :class="{ active: selectedRouteId === id }"
-        @click="handleNavClick(id as string)"
-      >
-        {{ route.name }}
-      </button>
+    <!-- Map Background -->
+    <div class="map-background">
+      <div ref="mapContainer" class="map-content"></div>
     </div>
 
-    <div class="main-container">
-      <div class="sidebar">
+    <!-- Floating Header -->
+    <header class="floating-header">
+      <div class="title-card">
+        <h1>武汉市红色旅游主题线路</h1>
+      </div>
+      <nav class="nav-pills">
         <button 
-          v-for="name in sidebarButtons" 
-          :key="name"
-          :class="{ active: selectedPlaceName === name }"
-          @click="handleSideClick(name)"
+          v-for="(route, id) in routes" 
+          :key="id"
+          :class="{ active: selectedRouteId === id }"
+          @click="handleNavClick(id as string)"
         >
-          {{ name }}
+          {{ route.name }}
         </button>
-        <button v-if="selectedRouteId" class="draw-btn" @click="handleDrawPathClick">
-          绘制轨迹线
+      </nav>
+    </header>
+
+    <!-- Floating Sidebar (Left) -->
+    <aside class="floating-sidebar left" v-if="selectedRouteId">
+      <div class="sidebar-card">
+        <h3>{{ routes[selectedRouteId]?.name }}</h3>
+        <div class="route-list">
+          <button 
+            v-for="name in sidebarButtons" 
+            :key="name"
+            :class="{ active: selectedPlaceName === name }"
+            @click="handleSideClick(name)"
+          >
+            <span class="marker-dot"></span>
+            {{ name }}
+          </button>
+        </div>
+        <button class="draw-btn" @click="handleDrawPathClick">
+          <span>📍 绘制游览轨迹</span>
         </button>
       </div>
+    </aside>
 
-      <div class="map-wrapper">
-        <div ref="mapContainer" class="map-content"></div>
-      </div>
-
-      <div class="content-panel">
-        <div v-if="selectedRouteId">
-          <h3>线路描述：</h3>
-          <p>{{ currentRouteDesc }}</p>
+    <!-- Floating Content Panel (Right) -->
+    <aside class="floating-sidebar right" v-if="selectedRouteId">
+      <Transition name="fade" mode="out-in">
+        <div class="content-card" v-if="selectedPlaceName" key="place">
+          <h3>{{ selectedPlaceName }}</h3>
+          <div class="desc-content">
+            <p>{{ currentPlaceDesc }}</p>
+          </div>
         </div>
-        <div v-if="selectedPlaceName">
-          <h3>景点描述：</h3>
-          <p>{{ currentPlaceDesc }}</p>
+        <div class="content-card" v-else key="route">
+          <h3>线路简介</h3>
+          <div class="desc-content">
+            <p>{{ currentRouteDesc }}</p>
+          </div>
         </div>
-      </div>
-    </div>
+      </Transition>
+    </aside>
 
-    <div class="footer">
-      中国地质大学（武汉）数字制图学课程设计 <br />2024年1月 (Modernized 2025)
+    <!-- Footer Credit -->
+    <div class="footer-credit">
+      中国地质大学（武汉）数字制图学课程设计 | 2024 Design
     </div>
   </div>
 </template>
 
 <style scoped>
 .red-tourism-layout {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  width: 100vw;
-  font-family: Arial, sans-serif;
-  overflow: hidden;
-}
-
-.title {
-  text-align: center;
-  font-size: 24px; /* Scaled down a bit */
-  padding: 10px;
-  color: #f0e0b0;
-  background-color: #ae3a1f;
-  flex-shrink: 0;
-}
-
-.nav {
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  background-color: #cf4f3c;
-  height: 50px;
-  flex-shrink: 0;
-}
-
-.nav button {
-  padding: 5px 15px;
-  border: none;
-  background-color: #f9f1e6;
-  cursor: pointer;
-  color: #ce6f57;
-  border-radius: 10px;
-  font-weight: bold;
-}
-
-.nav button:hover {
-  background-color: #fae3df;
-}
-
-.nav button.active {
-  background-color: #f6c8c0;
-  color: #ae3a1f;
-}
-
-.main-container {
-  display: flex;
-  flex: 1;
-  overflow: hidden; /* Map handles scrolling */
-}
-
-.sidebar {
-  width: 20%;
-  background-color: #d97857;
-  overflow-y: auto;
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.sidebar button {
-  width: 100%;
-  padding: 10px;
-  border: none;
-  background-color: #e8ab98;
-  cursor: pointer;
-  text-align: left;
-}
-
-.sidebar button:hover {
-  background-color: #de9e8b;
-}
-
-.sidebar button.active {
-  background-color: #cc715d;
-  color: white;
-}
-
-.draw-btn {
-  margin-top: 20px;
-  background-color: #ae3a1f !important;
-  color: #f0e0b0 !important;
-  text-align: center !important;
-}
-
-.map-wrapper {
-  width: 60%;
   position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #e0e0e0;
+}
+
+.map-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
 }
 
 .map-content {
@@ -433,41 +376,228 @@ function handleDrawPathClick() {
   height: 100%;
 }
 
-.content-panel {
-  width: 20%;
-  background-color: #d97857;
+/* --- Floating Header --- */
+.floating-header {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  width: 90%;
+  max-width: 1200px;
+  pointer-events: none; /* Let clicks pass through around items */
+}
+
+.title-card {
+  background: var(--color-primary);
+  padding: 10px 30px;
+  border-radius: 50px;
+  box-shadow: var(--shadow-float);
+  pointer-events: auto;
+}
+
+.title-card h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--color-accent);
+  letter-spacing: 2px;
+  font-weight: 700;
+}
+
+.nav-pills {
+  display: flex;
+  gap: 10px;
+  pointer-events: auto;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  padding: 8px;
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
+}
+
+.nav-pills button {
+  background: transparent;
+  border: 2px solid transparent;
+  color: var(--color-text-secondary);
+  padding: 8px 20px;
+  border-radius: 12px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.nav-pills button:hover {
+  background: rgba(183, 28, 28, 0.05);
+  color: var(--color-primary);
+}
+
+.nav-pills button.active {
+  background: var(--color-primary);
+  color: white;
+  box-shadow: 0 4px 10px rgba(183, 28, 28, 0.3);
+}
+
+/* --- Floating Sidebars --- */
+.floating-sidebar {
+  position: absolute;
+  top: 160px; /* Below header */
+  bottom: 60px; /* Above footer */
+  width: 320px;
+  z-index: 1000;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.floating-sidebar.left {
+  left: 20px;
+}
+
+.floating-sidebar.right {
+  right: 20px;
+}
+
+.sidebar-card, .content-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(15px);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+  padding: 24px;
+  height: 100%;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+}
+
+.sidebar-card h3, .content-card h3 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  font-size: 1.2rem;
+  color: var(--color-primary-dark);
+  border-bottom: 2px solid var(--color-accent);
+  padding-bottom: 10px;
+  display: inline-block;
+}
+
+/* Route List */
+.route-list {
+  flex: 1;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 5px;
+}
+
+.route-list button {
+  background: transparent;
+  border: 1px solid transparent;
+  text-align: left;
+  padding: 12px 15px;
+  border-radius: var(--radius-md);
+  color: var(--color-text-main);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.2s;
+}
+
+.marker-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ddd;
+  transition: background 0.3s;
+}
+
+.route-list button:hover {
+  background: #f8f8f8;
+  transform: translateX(5px);
+}
+
+.route-list button.active {
+  background: #fff5f5;
+  border-color: #ffcdd2;
+  color: var(--color-primary);
+  font-weight: bold;
+}
+
+.route-list button.active .marker-dot {
+  background: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(183, 28, 28, 0.2);
+}
+
+/* Draw Button */
+.draw-btn {
+  margin-top: 20px;
+  background: linear-gradient(135deg, var(--color-primary) 0%, #d32f2f 100%);
+  color: white;
   padding: 15px;
-  color: #fcf5ee;
+  border-radius: var(--radius-md);
+  font-weight: bold;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 15px rgba(211, 47, 47, 0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.content-panel h3 {
-  border-bottom: 1px solid rgba(255,255,255,0.3);
-  padding-bottom: 5px;
-  font-size: 16px;
+.draw-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(211, 47, 47, 0.5);
 }
 
-.content-panel p {
-  font-size: 14px;
-  line-height: 1.5;
+/* Content Panel */
+.desc-content {
+  flex: 1;
+  overflow-y: auto;
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--color-text-secondary);
 }
 
-.footer {
+/* Footer */
+.footer-credit {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  padding: 10px;
   text-align: center;
   font-size: 12px;
-  color: #f0e0b0;
-  background-color: #c05744;
-  padding: 5px;
-  flex-shrink: 0;
+  color: rgba(0, 0, 0, 0.6);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(5px);
+  z-index: 900;
+}
+
+/* Transition */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
 }
 </style>
 
 <style>
-/* Global styles for markers that are dynamically added */
+/* Leaflet Customizations */
 .my-div-icon {
-  font-size: 15px;
-  font-weight: bold;
-  color: #d83615;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  text-shadow: 0 2px 4px rgba(255,255,255,0.9), 0 0 2px white;
   white-space: nowrap;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--color-primary);
 }
 </style>
