@@ -61,6 +61,7 @@ onMounted(async () => {
   L.tileLayer.chinaProvider("GaoDe.Satellite.Map", {
     maxZoom: 20,
     minZoom: 5,
+    attribution: '&copy; <a href="https://www.amap.com/">AutoNavi</a> | &copy; <a href="https://leafletjs.com/">Leaflet</a>'
   }).addTo(m)
 
   // @ts-ignore
