@@ -25,6 +25,7 @@ interface PlaceInfo {
 // State
 const mapContainer = ref<HTMLElement | null>(null)
 const map = shallowRef<L.Map | null>(null)
+const isLoading = ref(true) // Loading state
 
 const routes = ref<Record<string, RouteInfo>>({})
 const places = ref<Record<string, PlaceInfo>>({})
@@ -87,50 +88,61 @@ onUnmounted(() => {
 
 // Data Loading
 async function loadData() {
-  // Load Routes
-  Papa.parse('/data/route.csv', {
-    download: true,
-    complete: (results) => {
-      const data = results.data as string[][]
-      // Skip header (row 0)
-      for (let i = 1; i < data.length; i++) {
-        const row = data[i]
-        if (!row || row.length < 4) continue
-        const id = row[0]
-        const name = row[1]
-        const detail = row[2]
-        const desc = row[3]
-        if (!id || !name || !detail || !desc) continue
-        routes.value[id] = { id, name, detail, desc }
-      }
-    }
+  isLoading.value = true // Start loading
+  
+  const p1 = new Promise<void>((resolve) => {
+      Papa.parse('/data/route.csv', {
+        download: true,
+        complete: (results) => {
+          const data = results.data as string[][]
+          for (let i = 1; i < data.length; i++) {
+            const row = data[i]
+            if (!row || row.length < 4) continue
+            const id = row[0]
+            const name = row[1]
+            const detail = row[2]
+            const desc = row[3]
+            if (!id || !name || !detail || !desc) continue
+            routes.value[id] = { id, name, detail, desc }
+          }
+          resolve()
+        }
+      })
   })
 
-  // Load Places
-  Papa.parse('/data/place.csv', {
-    download: true,
-    complete: (results) => {
-      const data = results.data as string[][]
-      for (let i = 1; i < data.length; i++) {
-        const row = data[i]
-        if (!row || row.length < 5) continue
-        const id = row[0]
-        const name = row[1]
-        const lng = row[2]
-        const lat = row[3]
-        const desc = row[4]
-        if (!id || !name || !lng || !lat || !desc) continue
-        
-        places.value[name] = { 
-          id, 
-          name, 
-          lng: parseFloat(lng), 
-          lat: parseFloat(lat), 
-          desc 
+  const p2 = new Promise<void>((resolve) => {
+      Papa.parse('/data/place.csv', {
+        download: true,
+        complete: (results) => {
+          const data = results.data as string[][]
+          for (let i = 1; i < data.length; i++) {
+            const row = data[i]
+            if (!row || row.length < 5) continue
+            const id = row[0]
+            const name = row[1]
+            const lng = row[2]
+            const lat = row[3]
+            const desc = row[4]
+            if (!id || !name || !lng || !lat || !desc) continue
+            places.value[name] = { 
+              id, 
+              name, 
+              lng: parseFloat(lng), 
+              lat: parseFloat(lat), 
+              desc 
+            }
+          }
+          resolve()
         }
-      }
-    }
+      })
   })
+
+  await Promise.all([p1, p2])
+  
+  // Minimum loading time for smooth transition
+  setTimeout(() => {
+    isLoading.value = false
+  }, 800)
 }
 
 // Interactions
@@ -170,9 +182,9 @@ function handleNavClick(routeId: string) {
     
     const markerIcon = L.divIcon({
         html: name,
-        className: "my-div-icon",
-        iconSize: [250, 70],
-        iconAnchor: [-20, 40],
+        className: "custom-label-icon",
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
     })
     const textMarker = L.marker(latlng, { icon: markerIcon }).addTo(map.value!)
     
@@ -290,8 +302,16 @@ function handleDrawPathClick() {
       <div ref="mapContainer" class="map-content"></div>
     </div>
 
+    <!-- Loading Overlay -->
+    <Transition name="fade">
+      <div class="loading-overlay" v-if="isLoading">
+        <div class="spinner"></div>
+        <div class="loading-text">载入红色地图故事...</div>
+      </div>
+    </Transition>
+
     <!-- Floating Header -->
-    <header class="floating-header">
+    <header class="floating-header" v-if="!isLoading">
       <div class="title-card">
         <h1>武汉市红色旅游主题线路</h1>
       </div>
@@ -308,19 +328,21 @@ function handleDrawPathClick() {
     </header>
 
     <!-- Floating Sidebar (Left) -->
-    <aside class="floating-sidebar left" v-if="selectedRouteId">
+    <aside class="floating-sidebar left" v-if="selectedRouteId && !isLoading">
       <div class="sidebar-card">
         <h3>{{ routes[selectedRouteId]?.name }}</h3>
         <div class="route-list">
-          <button 
-            v-for="name in sidebarButtons" 
-            :key="name"
-            :class="{ active: selectedPlaceName === name }"
-            @click="handleSideClick(name)"
-          >
-            <span class="marker-dot"></span>
-            {{ name }}
-          </button>
+          <TransitionGroup name="list">
+            <button 
+              v-for="name in sidebarButtons" 
+              :key="name"
+              :class="{ active: selectedPlaceName === name }"
+              @click="handleSideClick(name)"
+            >
+              <span class="marker-dot"></span>
+              {{ name }}
+            </button>
+          </TransitionGroup>
         </div>
         <button class="draw-btn" @click="handleDrawPathClick">
           <span>📍 绘制游览轨迹</span>
@@ -329,7 +351,7 @@ function handleDrawPathClick() {
     </aside>
 
     <!-- Floating Content Panel (Right) -->
-    <aside class="floating-sidebar right" v-if="selectedRouteId">
+    <aside class="floating-sidebar right" v-if="selectedRouteId && !isLoading">
       <Transition name="fade" mode="out-in">
         <div class="content-card" v-if="selectedPlaceName" key="place">
           <h3>{{ selectedPlaceName }}</h3>
@@ -345,6 +367,7 @@ function handleDrawPathClick() {
         </div>
       </Transition>
     </aside>
+
 
     <!-- Footer Credit -->
     <div class="footer-credit">
@@ -376,6 +399,44 @@ function handleDrawPathClick() {
   height: 100%;
 }
 
+/* --- Loading Overlay --- */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #b71c1c; /* Deep Red */
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: #ffd700; /* Gold */
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(255, 215, 0, 0.3);
+  border-top: 4px solid #ffd700;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+.loading-text {
+  font-size: 1.2rem;
+  letter-spacing: 2px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 /* --- Floating Header --- */
 .floating-header {
   position: absolute;
@@ -390,6 +451,7 @@ function handleDrawPathClick() {
   width: 90%;
   max-width: 1200px;
   pointer-events: none; /* Let clicks pass through around items */
+  transition: all 0.5s ease;
 }
 
 .title-card {
@@ -461,16 +523,18 @@ function handleDrawPathClick() {
 }
 
 .sidebar-card, .content-card {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(15px);
+  background: rgba(255, 255, 255, 0.85); /* Slightly more transparent */
+  backdrop-filter: blur(20px) saturate(180%); /* Stronger blur + saturation */
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-float);
+  box-shadow: 
+    0 8px 32px 0 rgba(31, 38, 135, 0.15),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.4); /* Inner border highlight */
   padding: 24px;
   height: 100%;
   pointer-events: auto;
   display: flex;
   flex-direction: column;
-  border: 1px solid rgba(255, 255, 255, 0.5);
   overflow: hidden;
 }
 
@@ -545,6 +609,10 @@ function handleDrawPathClick() {
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
+.draw-btn:active {
+  transform: scale(0.98);
+}
+
 .draw-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(211, 47, 47, 0.5);
@@ -585,19 +653,59 @@ function handleDrawPathClick() {
   opacity: 0;
   transform: translateY(10px);
 }
+
+/* List Transitions */
+.list-enter-active,
+.list-leave-active {
+  transition: all 0.4s ease;
+}
+.list-enter-from,
+.list-leave-to {
+  opacity: 0;
+  transform: translateX(-20px);
+}
 </style>
 
 <style>
 /* Leaflet Customizations */
-.my-div-icon {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--color-primary-dark);
-  text-shadow: 0 2px 4px rgba(255,255,255,0.9), 0 0 2px white;
+.custom-label-icon {
+  /* Reset default styles */
+  background: none !important;
+  border: none !important;
+  
+  /* Force dimensions to wrap content */
+  width: auto !important;
+  height: auto !important;
+}
+
+/* Target the text inside the divIcon directly since we removed the wrapper div */
+.custom-label-icon {
+  position: absolute;
+  /* Position to the right of the marker anchor (0,0) */
+  left: 12px !important; 
+  top: 0 !important;
+  
+  /* Center vertically relative to the point */
+  transform: translateY(-50%); 
+  
+  /* Ensure horizontal layout */
+  width: auto !important;
   white-space: nowrap;
-  background: rgba(255, 255, 255, 0.8);
-  padding: 2px 6px;
-  border-radius: 4px;
-  border: 1px solid var(--color-primary);
+  text-align: left;
+  
+  /* Typography */
+  font-size: 14px;
+  font-weight: bold;
+  color: #fff;
+  
+  /* Heavy text shadow for readability on any background */
+  text-shadow: 
+    -1px -1px 0 #b71c1c,  
+     1px -1px 0 #b71c1c,
+    -1px  1px 0 #b71c1c,
+     1px  1px 0 #b71c1c,
+     0px 1px 3px rgba(0,0,0,0.8);
+     
+  pointer-events: none;
 }
 </style>
