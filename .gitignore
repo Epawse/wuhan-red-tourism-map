@@ -129,5 +129,19 @@ dist
 .DS_Store
 
 # AI Agent Artifacts
+
+.gemini
+
 .gemini/
+
+openspec
+
 openspec/
+
+
+
+# IDEs
+
+.vscode
+
+.vscode/

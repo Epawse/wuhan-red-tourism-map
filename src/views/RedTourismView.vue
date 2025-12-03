@@ -371,7 +371,7 @@ function handleDrawPathClick() {
 
     <!-- Footer Credit -->
     <div class="footer-credit">
-      中国地质大学（武汉）数字制图学课程设计 | 2024 Design
+      2025 Design
     </div>
   </div>
 </template>
